@@ -1,0 +1,29 @@
+# GitHub Actions builds are disabled. To re-enable, rename this file to
+# build.yml and remove the comment prefix from the workflow below.
+#
+# name: PS5 MarketBoard native build
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches: [main]
+#     paths: ['src/**', 'sce_sys/**', 'build-linux.sh', '.github/workflows/build.yml']
+# jobs:
+#   build:
+#     runs-on: ubuntu-24.04
+#     timeout-minutes: 50
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Install host toolchain
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y clang-18 clang-format-18 clang-tidy-18 lld-18 make ninja-build ccache pkg-config git curl wget unzip tar zip python3 python3-pip python3-venv
+#       - name: Run host tests
+#         run: ./run-tests.sh
+#       - name: Build native PS5 title folder
+#         run: ./build-linux.sh
+#       - name: Publish ShadowMountPlus installable folder
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: MarketBoard-PPSA99880
+#           path: output/PPSA99880.zip
+#           if-no-files-found: error

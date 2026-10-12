@@ -1,0 +1,10 @@
+.build/
+output/
+dist/
+build/
+*.o
+*.elf
+*.bin
+*.zip
+*.prx
+.DS_Store
