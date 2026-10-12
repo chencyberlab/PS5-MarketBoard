@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "market_core.hpp"
 #include "market_network.hpp"
+#include "market_icons.hpp"
 #include "core/input.hpp"
 #include "core/save_file.hpp"
 #include "gfx/backdrop_spec.hpp"
@@ -20,6 +21,7 @@
 #include <ctime>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace {
 using hui::gfx::Color;
@@ -107,6 +109,7 @@ class Dashboard {
     if(hui::save::read_file(kPrefsFile,&saved,2048)&&
        market::parse_prefs(saved.data(),saved.size(),parsed))prefs_=parsed;
     market::start_market_updates(prefs_);
+    market::start_icons(prefs_);
   }
   void update(const hui::InputFrame &input){
     if(keyboard_){ keyboard_input(input);return; }
@@ -133,7 +136,14 @@ class Dashboard {
     }
   }
   bool should_quit() const {return quit_;}
+  void release_icons(){
+    for(auto &icon:icons_){
+        if(icon.texture)glDeleteTextures(1,&icon.texture);
+        icon=IconTexture{};
+    }
+  }
   void render(g::Renderer &renderer,float elapsed){
+    sync_icons(renderer);
     const market::FeedState feed=market::read_market_state();
     g::BackdropSpec backdrop{};
     backdrop.mode=g::BackdropMode::aurora;
@@ -171,12 +181,69 @@ class Dashboard {
   std::string notification_;
   float notification_since_=0;
   float elapsed_=0;
+  struct IconTexture {
+    char base[market::kIconBaseSize]{};
+    GLuint texture=0;
+    std::shared_ptr<const market::IconPixels> pixels;
+  };
+  IconTexture icons_[market::kMaxPairs]{};
+
+  void sync_icons(g::Renderer &renderer){
+    // Release removed assets after the previous frame has been presented.
+    for(auto &icon:icons_){
+        if(!icon.base[0])continue;
+        bool retained=false;
+        for(int i=0;i<prefs_.count;++i){
+            char base[market::kIconBaseSize]{};
+            if(market::icon_base(prefs_.pairs[i],base)&&std::strcmp(base,icon.base)==0)retained=true;
+        }
+        if(!retained){
+            if(icon.texture)glDeleteTextures(1,&icon.texture);
+            icon=IconTexture{};
+        }
+    }
+    // Only GPU upload happens here. Reads, decoding and HTTPS run on a worker.
+    // One upload per frame keeps initial loading spread across frames.
+    for(int i=0;i<prefs_.count;++i){
+        char base[market::kIconBaseSize]{};
+        if(!market::icon_base(prefs_.pairs[i],base))continue;
+        bool loaded=false;
+        for(const auto &icon:icons_)if(std::strcmp(base,icon.base)==0)loaded=true;
+        if(loaded)continue;
+        auto pixels=market::read_icon(base);if(!pixels)continue;
+        for(auto &icon:icons_)if(!icon.base[0]){
+            icon.texture=renderer.batch().create_texture(pixels->width,pixels->height,pixels->rgba.data());
+            if(icon.texture){std::strcpy(icon.base,base);icon.pixels=std::move(pixels);}
+            return;
+        }
+    }
+  }
+  void token_icon(g::DrawList &d,const char *pair,float cx,float cy,float size){
+    char base[market::kIconBaseSize]{};
+    if(!market::icon_base(pair,base))std::strcpy(base,"?");
+    const Rect bounds{cx-size*.5f,cy-size*.5f,size,size};
+    for(const auto &icon:icons_)if(icon.texture&&std::strcmp(icon.base,base)==0){
+        d.circle(cx,cy,size*.5f,Color::rgb(0x1c2b41));
+        const float scale=size/static_cast<float>(std::max(icon.pixels->width,icon.pixels->height));
+        const float w=icon.pixels->width*scale,h=icon.pixels->height*scale;
+        d.image(icon.texture,{cx-w*.5f,cy-h*.5f,w,h},g::kFullUv,Color::rgb(0xffffff));
+        return;
+    }
+    const Color tint=Color::rgb(market::icon_color(base));
+    d.gradient_rect(bounds,size*.5f,g::mix(tint,white,.14f),g::mix(tint,panel,.4f));
+    d.ring(cx,cy,size*.5f,1.2f,tint);
+    const float preferred=size*.29f;
+    const float width=fonts_.semibold.font->measure(base,preferred);
+    const float font_size=preferred*std::min(1.0f,size*.78f/std::max(width,1.0f));
+    text(d,fonts_.semibold,base,cx,cy+font_size*.35f,font_size,white,g::Align::center);
+  }
 
   void save_and_update(){
     char buffer[2048]{};
     if(market::serialize_prefs(prefs_,buffer,sizeof(buffer)))
        hui::save::write_atomic(kPrefsFile,buffer);
     market::set_market_preferences(prefs_);
+    market::set_icon_preferences(prefs_);
   }
   void keyboard_input(const hui::InputFrame &in){
     if(in.is_pressed(hui::Action::back)){keyboard_=false;return;}
@@ -219,8 +286,9 @@ class Dashboard {
   void big_quote(g::DrawList &d,const market::FeedState &feed){
     Rect r{83,206,1104,573};box(d,r,30);
     const auto &e=feed.entries[selected_];
-    d.circle(139,268,9,(!e.ready?dim:(e.fresh?green:red)));
-    text(d,fonts_.semibold,e.symbol,164,279,28,white);
+    token_icon(d,e.symbol,146,268,52);
+    text(d,fonts_.semibold,e.symbol,187,279,28,white);
+    d.circle(890,273,5,(!e.ready?dim:(e.fresh?green:red)));
     text(d,fonts_.regular,(!e.ready?"AWAITING MARKET DATA":
          e.fresh?"LIVE MARKET QUOTE":"LAST KNOWN QUOTE"),1134,279,16,muted,g::Align::right);
     text(d,fonts_.regular,"LATEST PRICE",133,363,21,muted);
@@ -274,10 +342,17 @@ class Dashboard {
             d.rounded_rect({1236,static_cast<float>(y-9),581,62},16,Color::rgb(0x223450));
             d.rounded_rect({1236,static_cast<float>(y-6),4,56},2,cyan);
         }
-        text(d,fonts_.semibold,e.symbol,1262,y+17,23,idx==selected_?white:Color::rgb(0xcedbef));
+        token_icon(d,e.symbol,1273,static_cast<float>(y+19),38);
+        const float pair_width=fonts_.semibold.font->measure(e.symbol,23);
+        const float pair_size=23*std::min(1.0f,221/std::max(pair_width,1.0f));
+        d.push_clip({1304,static_cast<float>(y-9),228,60});
+        text(d,fonts_.semibold,e.symbol,1304,y+17,pair_size,idx==selected_?white:Color::rgb(0xcedbef));
+        d.pop_clip();
         if(e.ready){
             const std::string price=label_price(e.quote.price);
-            text(d,fonts_.mono,price.c_str(),1787,y+12,25,white,g::Align::right);
+            const float price_width=fonts_.mono.font->measure(price,25);
+            const float price_size=25*std::min(1.0f,239/std::max(price_width,1.0f));
+            text(d,fonts_.mono,price.c_str(),1787,y+12,price_size,white,g::Align::right);
             if(e.quote.has_change){
                 char change[36]{};
                 std::snprintf(change,sizeof(change),"%+.2f%%",e.quote.change_24h);
@@ -372,7 +447,7 @@ int main(){
         const InputFrame input=tracker.update(std::span<const PadSample>(samples,n),
                                                static_cast<std::uint64_t>(now));
         dashboard.update(input);
-        if(dashboard.should_quit()){pad.close();sys::quit();}
+        if(dashboard.should_quit()){dashboard.release_icons();pad.close();sys::quit();}
         dashboard.render(renderer,static_cast<float>(now-launched)/1000000.0f);
         if(!display.swap()){sys::log("[MARKETBOARD] Display swap failed");sys::park();}
         if(first){sys::hide_splash_screen();first=false;}

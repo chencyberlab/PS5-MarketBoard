@@ -12,7 +12,8 @@ A homebrew **native PS5 title**, not an ELF payload or Linux boot environment. U
 - Binance / KuCoin / Coinbase / CoinGecko fallback. Only providers listing the **exact** pair are eligible. For USDT: Binance and KuCoin; for USD: Coinbase, Binance, KuCoin and CoinGecko (CoinGecko only for explicitly mapped assets).
 - After a `429` response, per-provider exponential cooldown (30 to 600 seconds), or longer if the response has a numeric `Retry-After` (up to 3600 seconds). `403`/`451` triggers a temporary 120-second cooldown.
 - Data requests execute on a background network thread with HTTPS certificate verification. Retains last known price on outages with a stale state. Never fabricates chart history; sparklines use only successfully fetched prices collected during the current app session.
-- No API keys or credentials required for the public endpoints.
+- Bundled BTC, ETH, SOL, XRP, DOGE and USDT logos, plus optional CoinGecko image downloads, a persistent local icon cache, and colored symbol badges when no image is available.
+- Exchange price endpoints require no credentials. Optional CoinGecko icon lookup can use a Demo API key configured on the PS5.
 
 ## Controls
 
@@ -32,30 +33,60 @@ A homebrew **native PS5 title**, not an ELF payload or Linux boot environment. U
 
 Examples: `BTC/USDT`, `ETH/USD`, `DOGE/USDT`. The base must have 2–10 uppercase letters/digits. Unsupported exchange pairs will show as unavailable rather than substituted.
 
+## Token icons
+
+Both the selected quote and watchlist show an icon for the **base token**.
+`BTC/USD` and `BTC/USDT` share the same image and GPU texture. Resolution order:
+
+1. Load a bundled PNG from `/app0/assets/crypto` for BTC, ETH, SOL, XRP, DOGE or USDT.
+2. Reuse a downloaded image from `/download0/marketboard/icons/BASE.img`.
+3. If downloads are enabled, query [CoinGecko Search](https://docs.coingecko.com/reference/search-data) and download its image over verified HTTPS.
+4. Display a circle containing the base symbol while loading or when lookup fails.
+
+The `.img` cache files contain the original PNG/JPEG bytes. Images are decoded and validated **before** atomic cache writes. Downloads are limited to 256 KiB and 256×256 pixels; WebP/SVG and larger images use the symbol badge. The cache keeps at most 64 downloaded images and evicts the oldest saved files. Bundled images stay in the application folder.
+
+Image I/O, decoding and network requests use a dedicated background thread, separate from price polling. The render thread uploads at most one ready image per frame, shares textures across quote currencies, and releases textures when a base leaves the watchlist. Cached images are reused across launches without another download. Unavailable images retry after 30 minutes; metadata requests are spaced by at least 10 seconds with additional failure/rate-limit backoff and numeric `Retry-After` support.
+
+Symbols are not unique identifiers. Explicitly mapped assets must match the existing CoinGecko ID in `market_core.cpp`; other symbols need exactly one exact symbol match in the search response. Ambiguous matches use the badge. Only CoinGecko's HTTPS coin-image hosts are accepted; redirects are disabled. Image lookup never changes the trading pair or price-provider choice.
+
+Downloads are enabled by default. To disable them, create `/download0/marketboard/icons-enabled.txt` containing `0`. Set it to `1` or remove it to enable downloads. Bundled and cached images work in either mode. Configuration is read at launch; restart after changing it.
+
+For [CoinGecko Demo authentication](https://docs.coingecko.com/demo/reference/authentication), optionally put only your Demo key in `/download0/marketboard/coingecko-demo-key.txt` on the PS5 (one line, up to 128 printable ASCII characters). It is sent through the `x-cg-demo-api-key` header to the CoinGecko API, never to image hosts, and is not saved in preferences or bundled into the title. Without a key the app attempts the public endpoint; authentication/rate-limit failures leave the badge visible. No Mac environment setup is needed for the code change.
+
+The six checked-in PNGs come from the CC0 [Cryptocurrency Icons](https://github.com/spothq/cryptocurrency-icons) project. A vendored `stb_image.h` provides PNG/JPEG decoding without another installed package or link dependency. Source and license details are included beside the assets and decoder.
+
 ## Build (Ubuntu 24.04, Debian with clang-18, or WSL2)
 
 The supplied `build-linux.sh` downloads [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui) and overlays this application's sources into the upstream native application builder. The upstream project builds the native home-screen title using PS5 Payload SDK, ps5-opengl, its bundled native FSELF/signing conversion flow, and its clean-room runtime.
 
-Install system tools (Ubuntu):
+For **Ubuntu 24.04 x64**, install these system tools manually first. `build-linux.sh` does **not** run `apt` or install system packages:
 
 ```bash
 sudo apt update
-sudo apt install -y clang-18 clang-format-18 clang-tidy-18 lld-18 clang \
-  make ninja-build ccache pkg-config git curl wget unzip tar zip \
-  python3 python3-pip python3-venv
+sudo apt install -y \
+  build-essential clang-18 llvm-18-dev lld-18 libclang-rt-18-dev \
+  ninja-build ccache pkg-config git curl wget unzip zip tar \
+  python3 ca-certificates
 ```
 
-Test portable C++ components (works on a PC):
+Then, from this project's root directory, select LLVM 18, run the portable C++ tests, and build the PS5 title:
 
 ```bash
+export LLVM_CONFIG=/usr/bin/llvm-config-18
 ./run-tests.sh
-```
-
-Then run:
-
-```bash
 ./build-linux.sh
 ```
+
+The `LLVM_CONFIG` setting applies to the current shell; set it again when building from a new terminal.
+
+The build script and upstream builder automatically:
+
+- Clone `ps5-homebrew-ui` and overlay MarketBoard's sources and bundled token icons.
+- Download the pinned PS5 Payload SDK and ps5-opengl SDK.
+- Download and build a local zlib dependency and the native build tools.
+- Build the clean-room runtime and application, then package the title folder and ZIP.
+
+Downloaded dependencies and intermediate build files stay under this project's `.build/` directory. Internet access is required for the first build. Node.js, pip packages and a separate PNG library are unnecessary for this build; the token-image decoder is included in the source. `clang-format-18` and `clang-tidy-18` are optional for upstream lint/format checks. The basic build does not require `python3-pip` or `python3-venv`.
 
 The script builds an **installable title folder**, creating:
 
@@ -105,6 +136,7 @@ ShadowMountPlus documentation: https://github.com/VB7749/ShadowMountPlus
 
 - Host tests for watchlist normalization/add/remove/save/load and four source parsers, including rejection of malformed input.
 - C++20 compile-level syntax check of `main.cpp` and network source against API-compatible local declarations.
+- The token-icon update was reviewed without compiling or installing dependencies. Shell syntax checks and all six PNG integrity checks (signatures, chunk CRCs and compressed pixel data) passed. Portable icon tests were added to `run-tests.sh` for later execution: exact/ambiguous identity matching, safe URLs/cache paths, malformed JSON, bundled image decoding and size limits. These new tests have **not** been run.
 - **Not** yet performed: actual PS5 cross-build, signed output validation, USB/ShadowMount installation, networking/graphics tests on a console.
 
 ## Licensing / acknowledgments

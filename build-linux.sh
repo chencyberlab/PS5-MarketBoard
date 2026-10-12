@@ -10,7 +10,9 @@ if [[ ! -d "$WORK/.git" ]]; then
   git clone --depth 1 "$UPSTREAM" "$WORK"
 fi
 # The kit is reused, not forked or modified in place in the remote repository.
-cp "$ROOT"/src/*.cpp "$ROOT"/src/*.hpp "$WORK/src/"
+cp -a "$ROOT/src/." "$WORK/src/"
+mkdir -p "$WORK/assets/crypto"
+cp -a "$ROOT/assets/crypto/." "$WORK/assets/crypto/"
 cp "$ROOT/sce_sys/icon0.png" "$WORK/sce_sys/icon0.png"
 # Preserve app-local source in a separate folder and copy the original GPL notices.
 make -C "$WORK" init TITLE_ID=PPSA99880 APP_NAME="MarketBoard" APP_CATEGORY=media

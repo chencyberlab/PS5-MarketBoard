@@ -133,7 +133,8 @@ const char *coingecko_id(const char *base) noexcept {
         {"BTC","bitcoin"},{"ETH","ethereum"},{"SOL","solana"},{"XRP","ripple"},
         {"DOGE","dogecoin"},{"ADA","cardano"},{"AVAX","avalanche-2"},
         {"LINK","chainlink"},{"DOT","polkadot"},{"LTC","litecoin"},
-        {"UNI","uniswap"},{"BNB","binancecoin"},{"TRX","tron"},{"SHIB","shiba-inu"}
+        {"UNI","uniswap"},{"BNB","binancecoin"},{"TRX","tron"},{"SHIB","shiba-inu"},
+        {"USDT","tether"},{"USDC","usd-coin"}
     };
     if(!base)return nullptr;
     for(const auto &it:items)if(std::strcmp(base,it.symbol)==0)return it.id;
