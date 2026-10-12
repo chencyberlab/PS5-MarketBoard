@@ -1,6 +1,6 @@
 # PS5 MarketBoard — Native Crypto Watchlist
 
-A homebrew **native PS5 title**, not an ELF payload or Linux boot environment. Uses the PS5 Homebrew UI OpenGL kit. Preview **v0.2**; locally cross-compiled and packaged, not yet tested on PS5 hardware.
+A homebrew **native PS5 game**, not a media app, ELF payload, or Linux boot environment. Uses the PS5 Homebrew UI OpenGL kit. Preview **v0.2**; locally cross-compiled and packaged. The shell only starts it from the Games row.
 
 ## Features
 
@@ -111,6 +111,16 @@ This archive is **not a conventional PS5 PKG**: it is the game/homebrew director
 
 The default title ID is `PPSA99880`; **make sure it does not conflict with an existing title**. Change it in `build-linux.sh` if needed, in the `make init`, output validation and copy commands.
 
+`build-linux.sh` initializes the title as a **game** (`APP_CATEGORY=game`). That writes the three fields the shell uses to place and start a native title:
+
+| Field | Game value | What the shell does with it |
+|---|---|---|
+| `applicationCategoryType` | `0` | Native game. `65536` is a Prospero native media app and is filed under Media. |
+| `contentBadgeType` | `1` | Game badge. `2` is the non-game badge. |
+| `gameIntent.permittedIntents` | `launchActivity` | Required before the shell will start a game. The media initializer deletes this field. |
+
+The executable is the UI kit's game FSELF. A media `param.json` still produces an icon, but the media launch path rejects that executable before `main` and the system reports that it cannot open the app. The build stops if `sce_sys/param.json` is not this game combination. Category does not change the sandbox: HTTPS stays on the unprivileged `sceHttp`/`sceSsl` path.
+
 ## Installation — ShadowMountPlus
 
 Prerequisites: PS5 already running a compatible jailbreak/homebrew environment, with ShadowMountPlus configured.
@@ -121,7 +131,7 @@ Recommended method: copy the **uncompressed** `output/PPSA99880/` directory via 
 /data/homebrew/PPSA99880/
 ```
 
-Then rescan/register with ShadowMountPlus. Its default scan roots also include a USB drive's `homebrew` directory. Folder installs are easier to update than disk images.
+If MarketBoard is already on the home screen, delete that tile first (Options, then Delete). The shell keeps the category from the first registration. Replacing the files for `PPSA99880` in place leaves the old Media entry, and that entry still refuses to open. Then rescan/register with ShadowMountPlus. The new tile belongs in **Games**. ShadowMountPlus's default scan roots also include a USB drive's `homebrew` directory. Folder installs are easier to update than disk images.
 
 For distribution as one mountable file, package the compiled title as a raw exFAT filesystem image:
 
@@ -140,7 +150,7 @@ ShadowMountPlus documentation: https://github.com/VB7749/ShadowMountPlus
 ## Implementation / limitations
 
 - The local PS5 cross-build succeeds and produces a signed title folder and ZIP. The executable and runtime pass the upstream container integrity checks; console behaviour remains unverified.
-- The graphical UI is written for the upstream kit's `gfx::Renderer`, `ui::Fonts`, and `ps5::Display`. The HTTPS transport follows the tested **sandboxed** `sceHttp`/`sceSsl` path documented in ps5-native-app-boilerplate. Do not elevate the app: elevated titles can encounter different certificate behaviour.
+- The graphical UI is written for the upstream kit's `gfx::Renderer`, `ui::Fonts`, and `ps5::Display`. The HTTPS transport follows the tested **sandboxed** `sceHttp`/`sceSsl` path documented in ps5-native-app-boilerplate. Do not elevate the app, and do not switch it back to `APP_CATEGORY=media`: elevated titles can encounter different certificate behaviour, and a media classification is what places the icon in Media and makes the shell refuse to open it.
 - 24h change values are exchange-specific; providers may calculate the period differently.
 - Public endpoint geographic availability and rate limits vary; not every listed pair exists everywhere.
 - The five-second interval may still be too aggressive with a long watchlist; the backoff limits repeated failures, and longer settings are recommended for 10+ pairs.
