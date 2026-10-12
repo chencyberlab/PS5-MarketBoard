@@ -1,6 +1,6 @@
 # PS5 MarketBoard — Native Crypto Watchlist
 
-A homebrew **native PS5 title**, not an ELF payload or Linux boot environment. Uses the PS5 Homebrew UI OpenGL kit. Source-only preview **v0.2**; not yet tested on PS5 hardware.
+A homebrew **native PS5 title**, not an ELF payload or Linux boot environment. Uses the PS5 Homebrew UI OpenGL kit. Preview **v0.2**; locally cross-compiled and packaged, not yet tested on PS5 hardware.
 
 ## Features
 
@@ -86,7 +86,13 @@ The build script and upstream builder automatically:
 - Download and build a local zlib dependency and the native build tools.
 - Build the clean-room runtime and application, then package the title folder and ZIP.
 
-Downloaded dependencies and intermediate build files stay under this project's `.build/` directory. Internet access is required for the first build. Node.js, pip packages and a separate PNG library are unnecessary for this build; the token-image decoder is included in the source. `clang-format-18` and `clang-tidy-18` are optional for upstream lint/format checks. The basic build does not require `python3-pip` or `python3-venv`.
+Downloaded dependencies and intermediate build files stay under this project's `.build/` directory. If the project path contains spaces, the script uses `/tmp/ps5-marketboard-build-<user ID>` because the upstream zlib installation does not support spaces in its output path. To choose another cache, set `MARKETBOARD_BUILD_DIR` to an absolute path without spaces, for example:
+
+```bash
+MARKETBOARD_BUILD_DIR=/tmp/ps5-marketboard-build ./build-linux.sh
+```
+
+The finished title and ZIP always go into this project's `output/` directory. Internet access is required for the first build. Node.js, pip packages and a separate PNG library are unnecessary for this build; the token-image decoder is included in the source. `clang-format-18` and `clang-tidy-18` are optional for upstream lint/format checks. The basic build does not require `python3-pip` or `python3-venv`.
 
 The script builds an **installable title folder**, creating:
 
@@ -117,13 +123,23 @@ Recommended method: copy the **uncompressed** `output/PPSA99880/` directory via 
 
 Then rescan/register with ShadowMountPlus. Its default scan roots also include a USB drive's `homebrew` directory. Folder installs are easier to update than disk images.
 
-An **optional** `.exfat` image can be created **after the native folder has successfully run**, using ShadowMountPlus's own `mkexfat.sh`. The image must have `sce_sys/param.json` and `eboot.bin` directly in its filesystem root. Do not rename `PPSA99880.zip` to `.exfat`.
+For distribution as one mountable file, package the compiled title as a raw exFAT filesystem image:
+
+```bash
+bash package-exfat.sh
+```
+
+The script installs the optional [MkPFS](https://github.com/PSBrew/MkPFS#pack-exfat) tool into a local package directory under `.build/exfat-tools` on its first run. It needs Python 3.9+ with pip (`sudo apt install python3-pip` on Ubuntu if missing) and internet access for that first installation. It does not need root privileges or mount a disk. It creates `output/PPSA99880.exfat` with 64 KiB clusters and `output/PPSA99880.exfat.sha256`, and compares every image file to the compiled folder by SHA-256 before publishing the image.
+
+An `.exfat` image is another package of the same compiled executable; it does not require a different compile target. `sce_sys/param.json`, `sce_module/libc.prx`, assets and `eboot.bin` sit directly at the image root. Do not rename `PPSA99880.zip` to `.exfat`.
+
+Copy the image to a ShadowMountPlus scan folder such as `/data/homebrew/MarketBoard/PPSA99880.exfat` or `/mnt/usb0/homebrew/MarketBoard/PPSA99880.exfat`, then rescan/register. Use either the folder install or the image for this title ID to avoid duplicate registrations. Image creation and integrity checks do not verify launching on a PS5; test on hardware before distributing it as a working release.
 
 ShadowMountPlus documentation: https://github.com/VB7749/ShadowMountPlus
 
 ## Implementation / limitations
 
-- This is a source deliverable, **not** a claimed compiled or hardware-verified binary. The cross-compilation toolchain and upstream SDK could not be downloaded in the authoring environment.
+- The local PS5 cross-build succeeds and produces a signed title folder and ZIP. The executable and runtime pass the upstream container integrity checks; console behaviour remains unverified.
 - The graphical UI is written for the upstream kit's `gfx::Renderer`, `ui::Fonts`, and `ps5::Display`. The HTTPS transport follows the tested **sandboxed** `sceHttp`/`sceSsl` path documented in ps5-native-app-boilerplate. Do not elevate the app: elevated titles can encounter different certificate behaviour.
 - 24h change values are exchange-specific; providers may calculate the period differently.
 - Public endpoint geographic availability and rate limits vary; not every listed pair exists everywhere.
@@ -134,10 +150,11 @@ ShadowMountPlus documentation: https://github.com/VB7749/ShadowMountPlus
 
 ## Technical validation performed
 
-- Host tests for watchlist normalization/add/remove/save/load and four source parsers, including rejection of malformed input.
-- C++20 compile-level syntax check of `main.cpp` and network source against API-compatible local declarations.
-- The token-icon update was reviewed without compiling or installing dependencies. Shell syntax checks and all six PNG integrity checks (signatures, chunk CRCs and compressed pixel data) passed. Portable icon tests were added to `run-tests.sh` for later execution: exact/ambiguous identity matching, safe URLs/cache paths, malformed JSON, bundled image decoding and size limits. These new tests have **not** been run.
-- **Not** yet performed: actual PS5 cross-build, signed output validation, USB/ShadowMount installation, networking/graphics tests on a console.
+- Host tests for watchlist normalization/add/remove/save/load and four source parsers, including rejection of malformed input, passed under AddressSanitizer and UndefinedBehaviorSanitizer.
+- Portable icon tests for exact/ambiguous identity matching, safe URLs/cache paths, malformed JSON, bundled image decoding and size limits passed under the same sanitizers.
+- The actual PS5 cross-build completed with LLVM 18, PS5 Payload SDK v0.42 and ps5-opengl SDK 1.0.0. The runtime checksum and signed `eboot.bin`/`libc.prx` container integrity checks passed.
+- ZIP integrity checks passed. The raw `.exfat` image was created with MkPFS 1.1.0 and passed image structure and file-by-file SHA-256 checks against the compiled title folder.
+- **Not** yet performed: USB/ShadowMount installation or networking/graphics tests on a console.
 
 ## Licensing / acknowledgments
 

@@ -4,8 +4,18 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 UPSTREAM=https://github.com/blackbearreloaded/ps5-homebrew-ui.git
-WORK="$ROOT/.build/ps5-homebrew-ui"
-mkdir -p "$ROOT/.build"
+BUILD_CACHE=${MARKETBOARD_BUILD_DIR:-"$ROOT/.build"}
+# The upstream zlib install recipes do not quote paths containing spaces.
+if [[ "$BUILD_CACHE" == *[[:space:]]* ]]; then
+  if [[ -n ${MARKETBOARD_BUILD_DIR:-} ]]; then
+    echo 'ERROR: MARKETBOARD_BUILD_DIR must be a path without whitespace' >&2
+    exit 1
+  fi
+  BUILD_CACHE="/tmp/ps5-marketboard-build-$UID"
+fi
+WORK="$BUILD_CACHE/ps5-homebrew-ui"
+mkdir -p "$BUILD_CACHE"
+echo "Build cache: $BUILD_CACHE"
 if [[ ! -d "$WORK/.git" ]]; then
   git clone --depth 1 "$UPSTREAM" "$WORK"
 fi
@@ -23,6 +33,7 @@ fi
 mkdir -p "$ROOT/output"
 rm -rf "$ROOT/output/PPSA99880"
 cp -a "$WORK/dist/PPSA99880" "$ROOT/output/"
-(cd "$ROOT/output" && zip -q -r -FS PPSA99880.zip PPSA99880)
+# Preserve the console file permissions stored by the upstream ZIP builder.
+cp "$WORK/dist/PPSA99880.zip" "$ROOT/output/PPSA99880.zip"
 echo "Created: $ROOT/output/PPSA99880.zip"
 echo 'Copy output/PPSA99880/ to /data/homebrew/PPSA99880/ for ShadowMountPlus.'

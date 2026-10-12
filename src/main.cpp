@@ -46,6 +46,15 @@ const Color red=Color::rgb(0xff8392);
 const char *const keys="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/"; // 37 glyphs
 constexpr int key_count=39; // char keys + DEL + SAVE
 
+bool read_local_time(std::time_t stamp,std::tm &out){
+    // The PS5 SDK exports localtime, but not localtime_r. Only the render
+    // thread formats dates; copy the shared result before the next call.
+    const std::tm *local=std::localtime(&stamp);
+    if(!local)return false;
+    out=*local;
+    return true;
+}
+
 std::string label_price(double v){
     char buf[64]{};
     if(v>=1000){
@@ -276,7 +285,7 @@ class Dashboard {
     std::time_t stamp=std::time(nullptr);
     std::tm local{};
     char clock[40]="--:--",date[64]="DATE UNAVAILABLE";
-    if(stamp>0&&localtime_r(&stamp,&local)){
+    if(stamp>0&&read_local_time(stamp,local)){
         std::strftime(clock,sizeof(clock),"%H:%M:%S",&local);
         std::strftime(date,sizeof(date),"%a, %d %b %Y",&local);
     }
@@ -316,7 +325,7 @@ class Dashboard {
     if(e.updated_at>0){
         const std::time_t stamp=static_cast<std::time_t>(e.updated_at);
         std::tm local{};char last[56]{};
-        if(localtime_r(&stamp,&local)){
+        if(read_local_time(stamp,local)){
             std::strftime(last,sizeof(last),"Updated %H:%M:%S",&local);
             text(d,fonts_.regular,last,384,574,16,muted);
         }
