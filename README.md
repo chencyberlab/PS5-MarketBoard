@@ -2,6 +2,8 @@
 
 A homebrew **native PS5 game**, not a media app, ELF payload, or Linux boot environment. Uses the PS5 Homebrew UI OpenGL kit. Preview **v0.2**; locally cross-compiled and packaged. The shell only starts it from the Games row.
 
+**Use at your own risk.** The author provides this project as is, with no warranty and no duty to maintain, update, or support it, and accepts no responsibility for damage, data loss, or any other consequence of building or installing it. Read the [disclaimer](#disclaimer) before you proceed.
+
 ## Features
 
 - Full-screen dark UI, animated backdrop, local date and digital clock.
@@ -165,6 +167,27 @@ ShadowMountPlus documentation: https://github.com/VB7749/ShadowMountPlus
 - The actual PS5 cross-build completed with LLVM 18, PS5 Payload SDK v0.42 and ps5-opengl SDK 1.0.0. The runtime checksum and signed `eboot.bin`/`libc.prx` container integrity checks passed.
 - ZIP integrity checks passed. The raw `.exfat` image was created with MkPFS 1.1.0 and passed image structure and file-by-file SHA-256 checks against the compiled title folder.
 - **Not** yet performed: USB/ShadowMount installation or networking/graphics tests on a console.
+
+## Disclaimer
+
+This software is experimental homebrew. It is provided **as is** and **as available**, without warranty of any kind, whether express or implied, including any warranty of merchantability, fitness for a particular purpose, title, or non-infringement.
+
+The author accepts **no obligation, duty, or responsibility** for this project or for anything that results from it. There is no commitment to maintain it, update it, fix defects, keep it compatible with any firmware, jailbreak, tool, or exchange, answer questions, or provide support. Development may stop, change, or be withdrawn at any time, without notice.
+
+**You install, build, modify, and run it entirely at your own risk.** You alone decide whether that risk is acceptable, and you alone bear the consequences. To the maximum extent permitted by applicable law, the author is not liable for any claim, damage, or loss arising out of or in connection with this software, including:
+
+- damage to a console, storage device, or other hardware, including a console that no longer boots or runs other software
+- loss of data, saves, accounts, installed titles, or configuration
+- account restrictions, bans, or loss of access to online services
+- a voided warranty, refused service, or repair cost
+- failures, outages, rate limits, or inaccurate data from networks and third-party price or image providers
+- any other direct, indirect, incidental, special, consequential, or punitive loss, even if the possibility was known
+
+A jailbroken or otherwise modified console, and the tools used to install homebrew on it, are outside this project's control. Confirm that the title ID does not collide with software you already have. A successful compile, package, or checksum check does not mean the result is safe to keep on a console. Test only on hardware you are willing to risk.
+
+If you do not accept these terms, do not download, build, install, or run this software.
+
+Nothing in this document creates a support contract, a duty of care, or any other legal relationship between you and the author. Some jurisdictions do not allow certain warranty or liability exclusions; where that is the case, the author's liability is limited to the minimum the law allows.
 
 ## Licensing / acknowledgments
 
